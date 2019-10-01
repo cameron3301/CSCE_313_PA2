@@ -43,14 +43,16 @@ int main(int argc, char *argv[]){
         d_msg.ecgno = 1;
         chan.cwrite(&d_msg, sizeof(d_msg));
         d_point1 = chan.cread();
+        string d_p1(d_point1);
 
         // Get data point for ecg2
         d_msg.ecgno = 2;
         chan.cwrite(&d_msg, sizeof(d_msg));
         d_point2 = chan.cread();
+        string d_p2(d_point2);
 
         // Write data to output csv file
-        myfile << t << "," << d_point1 << "," << d_point2 << "\n";
+        myfile << t << "," << *d_point1 << "," << d_p2 << "\n";
     }
 
     // Close connection for output file
