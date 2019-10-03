@@ -29,8 +29,8 @@ int main(int argc, char *argv[]){
 
     // Initiliaze first data_msg request
     datamsg d_msg(1, 0.0, 1);
-    char* d_point1;
-    char* d_point2;
+    double d_point1;
+    double d_point2;
 
     // Open connection for output file
     ofstream myfile;
@@ -42,17 +42,15 @@ int main(int argc, char *argv[]){
         // Get data point for ecg1
         d_msg.ecgno = 1;
         chan.cwrite(&d_msg, sizeof(d_msg));
-        d_point1 = chan.cread();
-        string d_p1(d_point1);
+        d_point1 = *(double*) chan.cread();
 
         // Get data point for ecg2
         d_msg.ecgno = 2;
         chan.cwrite(&d_msg, sizeof(d_msg));
-        d_point2 = chan.cread();
-        string d_p2(d_point2);
+        d_point2 = *(double*) chan.cread();
 
         // Write data to output csv file
-        myfile << t << "," << *d_point1 << "," << d_p2 << "\n";
+        myfile << t << "," << d_point1 << "," << d_point2 << "\n";
     }
 
     // Close connection for output file
