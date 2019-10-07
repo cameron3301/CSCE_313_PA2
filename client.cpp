@@ -296,7 +296,8 @@ int main(int argc, char *argv[])
                 int offset = 0;
                 while (true)
                 {
-                    if (file_length - offset >= MAX_MESSAGE)
+                    cout << file_length - offset << endl;
+                    if (file_length - offset > MAX_MESSAGE)
                     {
                         // Retrieve a chunk of input file data from the dataserver -> write data to the output file
                         buff = createFileMsgBuff(offset, MAX_MESSAGE, f_msg_filename);
@@ -454,7 +455,7 @@ int main(int argc, char *argv[])
                 int offset = 0;
                 while (true)
                 {
-                    if (file_length - offset >= MAX_MESSAGE)
+                    if (file_length - offset > MAX_MESSAGE)
                     {
                         // Retrieve a chunk of input file data from the dataserver -> write data to the output file
                         buff = createFileMsgBuff(offset, MAX_MESSAGE, f_msg_filename);
