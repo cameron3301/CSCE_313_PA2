@@ -62,6 +62,7 @@ void validateDataMsgArgs(int p, double s, int e) {
 }
 
 
+// Creates a character array `buff` that contains a file message
 char* createFileMsgBuff(__int64_t _offset, int _length, char* _filename) {
     filemsg fm(_offset, _length);
     const int size = sizeof(filemsg) + strlen(_filename) + 1;
@@ -85,6 +86,7 @@ int main(int argc, char *argv[])
     char* f_msg_filename = NULL;
     bool new_chan_msg_bool = false;
 
+    // get input arguments from the user in the command line
     while ((opt = getopt(argc, argv, ":p:t:e:f:c")) != -1) {
         switch(opt)
         {
@@ -156,21 +158,14 @@ int main(int argc, char *argv[])
         }
     }
 
-    // validate filemsg
-    if (f_msg_filename) {
-        // check if file exists
-        // ...
-    }
 
-
-
-
-    // FOOOOOOORK
+    // Create a child process to run the dataserver on
     if (!fork())
     {
         char* args[] = {"./dataserver", NULL};
         execvp(args[0], args);
     }
+    // proceed with the parent process
     else
     {
         int n = 100;    // default number of requests per "patient"
@@ -183,7 +178,7 @@ int main(int argc, char *argv[])
 
 
 
-        // if -c is passed, create a new channel
+        // if a new channel was requested, create the new channel and proceed using it
         if (new_chan_msg_bool)
         {
             // Create a new channel
@@ -193,13 +188,17 @@ int main(int argc, char *argv[])
             FIFORequestChannel new_chan (chan_name, FIFORequestChannel::CLIENT_SIDE);
 
 
+            // if a single data point was requested, execute the content of this conditional statement
             if (d_msg_bool)
             {
+                // initialize the datamsg object
                 datamsg d_msg(d_msg_person, d_msg_sec, d_msg_ecgno);
 
+                // write the datamsg to the dataserver -> read the data value returned by the dataserver
                 new_chan.cwrite(&d_msg, sizeof(d_msg));
                 double dp = *(double*) new_chan.cread();
 
+                // Print the data point value
                 cout << "---------------------------------------------------------------" << endl;
                 cout << "DATA_MSG: retreived using '" << chan_name << "' channel" << endl;
                 cout << "Person: " << d_msg_person << endl;
@@ -210,6 +209,7 @@ int main(int argc, char *argv[])
             }
 
 
+            // if a file's worth of data points were requested, execute the content of this conditional statement
             if (d_msg_file_bool)
             {
                 // Initiliaze first data_msg request
@@ -220,8 +220,10 @@ int main(int argc, char *argv[])
                 ofstream myfile;
                 myfile.open(out_file);
 
+                // start measuring the execution time
                 gettimeofday(&start, NULL);
 
+                // begin iterating through each column of the input CSV file
                 for (double t = 0; t <= 59.996; t += 0.004) {
                     d_msg.seconds = t;
 
@@ -242,10 +244,12 @@ int main(int argc, char *argv[])
                 // Close connection for output file
                 myfile.close();
 
+                // calculate total execution time
                 gettimeofday(&end, NULL);
                 time_taken = (end.tv_sec - start.tv_sec) * 1e6;
                 time_taken = (time_taken + (end.tv_sec - start.tv_sec)) * 1e-6;
 
+                // print information regarding the operation performed above 
                 cout << "---------------------------------------------------------------" << endl;
                 cout << "DATA_MSG: retreived using '" << chan_name << "' channel" << endl;
                 cout << "Person: " << d_msg_person << endl;
@@ -256,14 +260,14 @@ int main(int argc, char *argv[])
             }
 
 
-            // If FILE_MSG request was provided
+            // if a filemsg was requested, execute the content of this conditional statement
             if (f_msg_filename)
-            { 
+            {
                 char* file_data;
 
+                // Find the total length of the input file
                 char* buff = createFileMsgBuff(0, 0, f_msg_filename);
                 const int size = sizeof(filemsg) + strlen(f_msg_filename) + 1;
-
                 int w = new_chan.cwrite(buff, size);
                 __int64_t file_length = *(__int64_t*) new_chan.cread();
 
@@ -272,7 +276,7 @@ int main(int argc, char *argv[])
                 string out_file = "received/y" + in_file;
                 ofstream wf(out_file, ios::binary);
 
-                // if output file stream cannot be opened
+                // If output file stream cannot be opened
                 //   -> close all channels
                 //   -> throw error
                 if (!wf) {
@@ -285,13 +289,16 @@ int main(int argc, char *argv[])
                     throw invalid_argument("FileMsg Error: Output file could not be opened");
                 }
 
-                int offset = 0;
-
+                // Start measuring the execution time
                 gettimeofday(&start, NULL);
+
+                // Begin iterating through the input file chunk-by-chunk
+                int offset = 0;
                 while (true)
                 {
                     if (file_length - offset >= MAX_MESSAGE)
                     {
+                        // Retrieve a chunk of input file data from the dataserver -> write data to the output file
                         buff = createFileMsgBuff(offset, MAX_MESSAGE, f_msg_filename);
                         w = new_chan.cwrite(buff, size);
                         file_data = new_chan.cread();
@@ -299,8 +306,10 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
+                        // Find the necessary size for the final chunk
                         int final_chunk = file_length - offset;
 
+                        // Retrieve a chunk of input file data from the dataserver -> write data to the output file
                         buff = createFileMsgBuff(offset, final_chunk, f_msg_filename);
                         w = new_chan.cwrite(buff, size);
                         file_data = new_chan.cread();
@@ -311,6 +320,7 @@ int main(int argc, char *argv[])
                     offset += MAX_MESSAGE;
                 }
 
+                // Close the output file ostream
                 wf.close();
 
                 // Calculate the time taken during the file transfer
@@ -318,7 +328,7 @@ int main(int argc, char *argv[])
                 time_taken = (end.tv_sec - start.tv_sec) * 1e6;
                 time_taken = (time_taken + (end.tv_sec - start.tv_sec)) * 1e-6;
 
-                // ...........
+                // print information regarding the operation performed above 
                 cout << "---------------------------------------------------------------" << endl;
                 cout << "FILE_MSG: retreived using '" << chan_name << "' channel" << endl;
                 cout << "Input File: BIMDC/" << in_file << endl;
@@ -335,8 +345,10 @@ int main(int argc, char *argv[])
             wait();
 
         }
+        // if a new channel was NOT requested, proceed using the 'control' channel
         else
         {
+            // if a single data point was requested, execute the content of this conditional statement
             if (d_msg_bool) {
                 // initialize datamsg object
                 datamsg d_msg(d_msg_person, d_msg_sec, d_msg_ecgno);
@@ -356,6 +368,7 @@ int main(int argc, char *argv[])
             }
 
 
+            // if a series of data points were requested, execute the content of this conditional statement
             if (d_msg_file_bool)
             {
                 // Initiliaze first data_msg request
@@ -366,8 +379,10 @@ int main(int argc, char *argv[])
                 ofstream myfile;
                 myfile.open(out_file);
 
+                // start measuring the execution time
                 gettimeofday(&start, NULL);
 
+                // begin iterating through each column of the input CSV file
                 for (double t = 0; t <= 59.996; t += 0.004) {
                     d_msg.seconds = t;
 
@@ -388,10 +403,12 @@ int main(int argc, char *argv[])
                 // Close connection for output file
                 myfile.close();
 
+                // calculate the total execution time
                 gettimeofday(&end, NULL);
                 time_taken = (end.tv_sec - start.tv_sec) * 1e6;
                 time_taken = (time_taken + (end.tv_sec - start.tv_sec)) * 1e-6;
 
+                // print information regarding the operation performed above 
                 cout << "---------------------------------------------------------------" << endl;
                 cout << "DATA_MSG: retreived using 'control' channel" << endl;
                 cout << "Person: " << d_msg_person << endl;
@@ -402,14 +419,14 @@ int main(int argc, char *argv[])
             }
 
 
-            // If FILE_MSG request was provided
+            // if a filemsg was requested, execute the content of this conditional statement
             if (f_msg_filename)
             { 
                 char* file_data;
 
+                // Find the total length of the input file
                 char* buff = createFileMsgBuff(0, 0, f_msg_filename);
                 const int size = sizeof(filemsg) + strlen(f_msg_filename) + 1;
-
                 int w = chan.cwrite(buff, size);
                 __int64_t file_length = *(__int64_t*) chan.cread();
 
@@ -418,7 +435,7 @@ int main(int argc, char *argv[])
                 string out_file = "received/y" + in_file;
                 ofstream wf(out_file, ios::binary);
 
-                // if output file stream cannot be opened
+                // If output file stream cannot be opened
                 //   -> close all channels
                 //   -> throw error
                 if (!wf) {
@@ -429,14 +446,17 @@ int main(int argc, char *argv[])
 
                     throw invalid_argument("FileMsg Error: Output file could not be opened");
                 }
-
-                int offset = 0;
-
+                
+                // Start measuring the execution time
                 gettimeofday(&start, NULL);
+
+                // Begin iterating through the input file chunk-by-chunk
+                int offset = 0;
                 while (true)
                 {
                     if (file_length - offset >= MAX_MESSAGE)
                     {
+                        // Retrieve a chunk of input file data from the dataserver -> write data to the output file
                         buff = createFileMsgBuff(offset, MAX_MESSAGE, f_msg_filename);
                         w = chan.cwrite(buff, size);
                         file_data = chan.cread();
@@ -444,8 +464,10 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
+                        // Find the necessary size for the final chunk
                         int final_chunk = file_length - offset;
 
+                        // Retrieve a chunk of input file data from the dataserver -> write data to the output file
                         buff = createFileMsgBuff(offset, final_chunk, f_msg_filename);
                         w = chan.cwrite(buff, size);
                         file_data = chan.cread();
@@ -456,6 +478,7 @@ int main(int argc, char *argv[])
                     offset += MAX_MESSAGE;
                 }
 
+                // Close the output file ostream
                 wf.close();
 
                 // Calculate the time taken during the file transfer
@@ -463,7 +486,7 @@ int main(int argc, char *argv[])
                 time_taken = (end.tv_sec - start.tv_sec) * 1e6;
                 time_taken = (time_taken + (end.tv_sec - start.tv_sec)) * 1e-6;
 
-                // ...........
+                // Print information regarding the operation performed above 
                 cout << "---------------------------------------------------------------" << endl;
                 cout << "FILE_MSG: retreived using 'control' channel" << endl;
                 cout << "Input File: BIMDC/" << in_file << endl;
@@ -478,216 +501,6 @@ int main(int argc, char *argv[])
             chan.cwrite(&m_quit, sizeof(MESSAGE_TYPE));
             wait();
         }
-
-
-
-
-
-
-/*
-        // --------------- Task 1 ---------------
-
-        // Initiliaze first data_msg request
-        datamsg d_msg(1, 0.0, 1);
-
-        // Open connection for output file
-        ofstream myfile;
-        myfile.open("received/x1.csv");
-
-        gettimeofday(&start, NULL);
-
-        for (double t = 0; t <= 59.996; t += 0.004) {
-            d_msg.seconds = t;
-
-            // Get data point for ecg1
-            d_msg.ecgno = 1;
-            chan.cwrite(&d_msg, sizeof(d_msg));
-            double d_point1 = *(double*) chan.cread();
-
-            // Get data point for ecg2
-            d_msg.ecgno = 2;
-            chan.cwrite(&d_msg, sizeof(d_msg));
-            double d_point2 = *(double*) chan.cread();
-
-            // Write data to output csv file
-            cout << t << " , " << d_point1 << " , " << d_point2 << endl;
-            myfile << t << "," << d_point1 << "," << d_point2 << "\n";
-        }
-
-        // Close connection for output file
-        myfile.close();
-
-        gettimeofday(&end, NULL);
-        time_taken = (end.tv_sec - start.tv_sec) * 1e6;
-        time_taken = (time_taken + (end.tv_sec - start.tv_sec)) * 1e-6;
-        cout << "Time Taken (Data Pts) = " << time_taken << endl;
-
-/*
-
-        // --------------- Task 2 --------------- 
-
-
-        char* filename;
-        char* buff;
-        char* file_data;
-        int w, offset;
-        __int64_t file_length;
-
-        filename = "2.csv";
-        buff = createFileMsgBuff(0, 0, filename);
-        const int size = sizeof(filemsg) + strlen(filename) + 1;
-
-        w = chan.cwrite(buff, size);
-        file_length = *(__int64_t*) chan.cread();
-
-        offset = 0;
-
-        ofstream wf("received/y2.csv", ios::binary);
-        if (!wf) {
-            cout << "Cannot Open File!" << endl;
-            MESSAGE_TYPE m = QUIT_MSG;
-            chan.cwrite (&m, sizeof (MESSAGE_TYPE));
-        }
-
-        gettimeofday(&start, NULL);
-        while (true)
-        {
-            if (file_length - offset >= MAX_MESSAGE)
-            {
-                buff = createFileMsgBuff(offset, MAX_MESSAGE, filename);
-                w = chan.cwrite(buff, size);
-                file_data = chan.cread();
-                wf.write(file_data, MAX_MESSAGE);
-            }
-            else
-            {
-                int final_chunk = file_length - offset;
-
-                buff = createFileMsgBuff(offset, final_chunk, filename);
-                w = chan.cwrite(buff, size);
-                file_data = chan.cread();
-                wf.write(file_data, final_chunk);
-
-                break;
-            }
-            offset += MAX_MESSAGE;
-        }
-
-        wf.close();
-
-        // Calculate the time taken during the file transfer
-        gettimeofday(&end, NULL);
-        time_taken = (end.tv_sec - start.tv_sec) * 1e6;
-        time_taken = (time_taken + (end.tv_sec - start.tv_sec)) * 1e-6;
-        cout << "Time Taken (CSV File) = " << time_taken << endl;
-        cout << "File size of 2.csv = " << get_file_size("BIMDC/2.csv") << endl;
-        cout << "File size of y2.csv = " << get_file_size("y2.csv") << endl;
-
-
-        // -------------------------------------------------------------- 
-
-        filename = "file.txt";
-        buff = createFileMsgBuff(0, 0, filename);
-        const int size2 = sizeof(filemsg) + strlen(filename) + 1;
-
-        w = chan.cwrite(buff, size2);
-        file_length = *(__int64_t*) chan.cread();
-
-        offset = 0;
-
-        ofstream wf2("received/y_file.txt", ios::binary);
-        if (!wf2) {
-            cout << "Cannot Open File!" << endl;
-            MESSAGE_TYPE m = QUIT_MSG;
-            chan.cwrite (&m, sizeof (MESSAGE_TYPE));
-        }
-
-        gettimeofday(&start, NULL);
-        while (true) 
-        {
-            cout << "file_length - offset = " << (file_length - offset) << endl;
-            if (file_length - offset > MAX_MESSAGE)
-            {
-                buff = createFileMsgBuff(offset, MAX_MESSAGE, filename);
-                w = chan.cwrite(buff, size2);
-                file_data = chan.cread();
-                wf2.write(file_data, MAX_MESSAGE);
-            }
-            else
-            {
-                int final_chunk = file_length - offset;
-
-                buff = createFileMsgBuff(offset, final_chunk, filename);
-                w = chan.cwrite(buff, size2);
-                file_data = chan.cread();
-                wf2.write(file_data, final_chunk);
-
-                break;
-            }
-            offset += MAX_MESSAGE;
-        }
-
-        wf2.close();
-
-        // Calculate the time taken during the file transfer
-        gettimeofday(&end, NULL);
-        time_taken = (end.tv_sec - start.tv_sec) * 1e6;
-        time_taken = (time_taken + (end.tv_sec - start.tv_sec)) * 1e-6;
-        cout << "Time Taken (TXT File) = " << time_taken << endl;
-        cout << "File size of file.txt = " << get_file_size("BIMDC/file.txt") << endl;
-        cout << "File size of y_file.txt = " << get_file_size("y_file.txt") << endl;
-
-
-        // --------------- Task 3 --------------- 
-
-
-        // Create NewChannelMsg
-        MESSAGE_TYPE msg = NEWCHANNEL_MSG;
-        chan.cwrite(&msg, sizeof(MESSAGE_TYPE));
-        string chan_name= chan.cread();
-        FIFORequestChannel new_chan (chan_name, FIFORequestChannel::CLIENT_SIDE);
-
-        cout << "New channel's name = " << chan_name << endl;
-        
-        // Get Test datamsg 1
-        datamsg test_d_msg(3, 0, 1);
-        new_chan.cwrite(&test_d_msg, sizeof(test_d_msg));
-        double dp = *(double*) new_chan.cread();
-        cout << "Value for Person 3 at 0 seconds for ecg1 = " << dp << endl;
-
-        // Get Test datamsg 2
-        test_d_msg.seconds = 2.1;
-        new_chan.cwrite(&test_d_msg, sizeof(test_d_msg));
-        dp = *(double*) new_chan.cread();
-        cout << "Value for Person 3 at 2.1 seconds for ecg1 = " << dp << endl;
-
-        // Get Test datamsg 3
-        test_d_msg.ecgno = 2;
-        test_d_msg.person = 4;
-        new_chan.cwrite(&test_d_msg, sizeof(test_d_msg));
-        dp = *(double*) new_chan.cread();
-        cout << "Value for Person 4 at 2.1 seconds for ecg2 = " << dp << endl;
-
-
-
-
-
-
-
-    */
-        
-    }
-
-
-    
-
-
-    // closing the channel    
-/*
-    MESSAGE_TYPE m = QUIT_MSG;
-    new_chan.cwrite (&m, sizeof(MESSAGE_TYPE));
-    chan.cwrite (&m, sizeof(MESSAGE_TYPE));
-*/
-   
-   return 0;
+    }   
+    return 0;
 }
